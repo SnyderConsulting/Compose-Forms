@@ -4,10 +4,14 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.Button
 import androidx.compose.material.Text
 import androidx.compose.material.TextField
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import com.example.composeforms.ui.theme.ComposeFormsTheme
 
 class MainActivity : ComponentActivity() {
@@ -21,60 +25,60 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val keys = Keys()
-        var form by mutableStateOf(Form<Keys>())
+        var form by mutableStateOf(Form())
+
+        form.setRules(
+            ValidationRule(
+                inputKeys = listOf(
+                    keys.password1,
+                ),
+                errorKeys = listOf(
+                    keys.password1
+                ),
+                predicate = {
+                    form.state[keys.password1]?.let {
+                        it.length >= 8
+                    } ?: false
+                },
+                errorMessage = "Must be at least 8 characters"
+            ),
+            ValidationRule(
+                inputKeys = listOf(
+                    keys.password2,
+                ),
+                errorKeys = listOf(
+                    keys.password2
+                ),
+                predicate = {
+                    form.state[keys.password2]?.let {
+                        it.length >= 8
+                    } ?: false
+                },
+                errorMessage = "Must be at least 8 characters"
+            ),
+            ValidationRule(
+                inputKeys = listOf(
+                    keys.password1,
+                    keys.password2
+                ),
+                errorKeys = listOf(
+                    keys.password2
+                ),
+                predicate = {
+                    form.state[keys.password1] == form.state[keys.password2]
+                },
+                errorMessage = "Passwords must match."
+            ),
+        )
 
         setContent {
-            form.setRules(
-                ValidationRule(
-                    inputKeys = listOf(
-                        keys.password1,
-                    ),
-                    errorKeys = listOf(
-                        keys.password1
-                    ),
-                    predicate = {
-                        form.state[keys.password1]?.let {
-                            it.length >= 8
-                        } ?: false
-                    },
-                    errorMessage = "Must be at least 8 characters"
-                ),
-                ValidationRule(
-                    inputKeys = listOf(
-                        keys.password2,
-                    ),
-                    errorKeys = listOf(
-                        keys.password2
-                    ),
-                    predicate = {
-                        form.state[keys.password2]?.let {
-                            it.length >= 8
-                        } ?: false
-                    },
-                    errorMessage = "Must be at least 8 characters"
-                ),
-                ValidationRule(
-                    inputKeys = listOf(
-                        keys.password1,
-                        keys.password2
-                    ),
-                    errorKeys = listOf(
-                        keys.password2
-                    ),
-                    predicate = {
-                        form.state[keys.password1] == form.state[keys.password2]
-                    },
-                    errorMessage = "Passwords must match."
-                ),
-            )
-
             //Needed to trigger recomposition
             form.setChangeListener {
                 form = form
             }
 
-            val password1 = FormPassword(keys.password1, form)
-            val password2 = FormPassword(keys.password2, form)
+            val password1 = FormPassword("Password", keys.password1, form)
+            val password2 = FormPassword("Confirm Password", keys.password2, form)
 
             ComposeFormsTheme {
                 Column {
@@ -90,23 +94,34 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun Password(onChange: (String) -> Unit) {
+fun Password(label: String, onChange: (String) -> Unit) {
     var value by remember { mutableStateOf("") }
-    TextField(value = value, onValueChange = {
-        onChange(it)
-        value = it
-    })
+
+    Column(Modifier.padding(top = 16.dp)) {
+        Text(text = "$label:")
+        TextField(value = value, onValueChange = {
+            onChange(it)
+            value = it
+        })
+    }
 }
 
-class FormPassword<T>(key: String, formState: Form<T>) : FormComponent<T>(key, formState) {
+class FormPassword(private val label: String, key: String, formState: Form) :
+    FormComponent(key, formState) {
     @Composable
     override fun GetComposable() {
-        Password(onChange = { formState.onDataChange(key, it) })
+        Password(
+            label = label,
+            onChange = { formState.onDataChange(key, it) }
+        )
     }
 }
 
 
 //Form Boilerplate
+
+data class FormConfig(val key: String, val formState: Form)
+
 data class ValidationRule(
     val inputKeys: List<String>,
     val errorKeys: List<String>,
@@ -114,14 +129,14 @@ data class ValidationRule(
     val errorMessage: String
 )
 
-class Form<T> {
+data class FormError(val key: Int, val errorMessage: String)
+
+class Form {
 
     val state = mutableMapOf<String, String>()
     val errors = mutableMapOf<String, List<FormError>>()
     private val rules = mutableListOf<InternalValidationRule>()
     private var changeListener: () -> Unit = {}
-
-    data class FormError(val key: Int, val errorMessage: String)
 
     private data class InternalValidationRule(
         val id: Int,
@@ -213,7 +228,7 @@ class Form<T> {
     }
 }
 
-abstract class FormComponent<T>(val key: String, val formState: Form<T>) {
+abstract class FormComponent(val key: String, val formState: Form) {
 
     @Composable
     protected abstract fun GetComposable()
@@ -223,7 +238,7 @@ abstract class FormComponent<T>(val key: String, val formState: Form<T>) {
         Column {
             GetComposable()
             formState.errors[key]?.firstOrNull()?.also {
-                Text(text = "Error: ${it.errorMessage}")
+                Text(color = Color.Red, text = "Error: ${it.errorMessage}")
             }
         }
     }
