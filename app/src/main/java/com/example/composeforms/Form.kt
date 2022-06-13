@@ -5,6 +5,7 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.graphics.Color
 
 class Form private constructor() {
@@ -34,7 +35,7 @@ class Form private constructor() {
 
     interface FormController {
         val errors: FormErrorBundle
-        fun validate()
+        fun validate(key: String? = null)
         fun onDataChange(key: String, value: String)
     }
 
@@ -70,15 +71,6 @@ class Form private constructor() {
         changeListener()
     }
 
-    //Unused for now
-    fun validate(key: String? = null) {
-        if (key == null) {
-            validateAll()
-        } else {
-            validateSingle(key)
-        }
-    }
-
     fun setRules(
         vararg rules: ValidationRule
     ) {
@@ -103,8 +95,12 @@ class Form private constructor() {
             override val errors: FormErrorBundle
                 get() = errorState
 
-            override fun validate() {
-                validateAll()
+            override fun validate(key: String?) {
+                if (key == null) {
+                    validateAll()
+                } else {
+                    validateSingle(key)
+                }
             }
 
             override fun onDataChange(key: String, value: String) {
@@ -130,11 +126,11 @@ class Form private constructor() {
     companion object {
 
         @Composable
-        fun Render(rules: List<ValidationRule>, content: @Composable (FormController) -> Unit) {
+        fun Render(rules: List<ValidationRule>, content: @Composable FormScope.(FormController) -> Unit) {
             val form = Form()
             form.setRules(*rules.toTypedArray())
             form.Render {
-                content(it)
+                content(FormScope(form.errors), it)
             }
         }
     }
@@ -142,7 +138,7 @@ class Form private constructor() {
 
 data class ValidationRule(
     val inputKeys: List<String>,
-    val errorKeys: List<String>,
+    val errorKeys: List<String> = listOf(*inputKeys.toTypedArray()), // Use same input keys for error keys by default
     val predicate: (formState: Map<String, String>) -> Boolean,
     val errorMessage: String
 )
@@ -151,15 +147,16 @@ typealias FormErrorBundle = Map<String, List<FormError>>
 
 data class FormError(val key: Int, val errorMessage: String)
 
-abstract class FormComponent(val key: String, private val errors: FormErrorBundle) {
+data class FormScope(val errors: SnapshotStateMap<String, List<FormError>>) {
+    @Composable
+    fun FormItem(key: String, content: @Composable (key: String, errors: List<String>) -> Unit) {
+        content(key, errors[key].orEmpty().map { it.errorMessage })
+    }
 
     @Composable
-    protected abstract fun GetComposable()
-
-    @Composable
-    fun Compose() {
+    fun FormItemWithError(key: String, content: @Composable (key: String, errors: List<String>) -> Unit) {
         Column {
-            GetComposable()
+            content(key, errors[key].orEmpty().map { it.errorMessage })
             errors[key]?.firstOrNull()?.also {
                 Text(color = Color.Red, text = "Error: ${it.errorMessage}")
             }

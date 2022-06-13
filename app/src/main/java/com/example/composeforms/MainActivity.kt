@@ -10,6 +10,7 @@ import androidx.compose.material.Text
 import androidx.compose.material.TextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.example.composeforms.ui.theme.ComposeFormsTheme
 
@@ -22,12 +23,7 @@ class MainActivity : ComponentActivity() {
 
     private val rules = listOf(
         ValidationRule(
-            inputKeys = listOf(
-                Keys.password1,
-            ),
-            errorKeys = listOf(
-                Keys.password1
-            ),
+            inputKeys = listOf(Keys.password1),
             predicate = { state ->
                 state[Keys.password1]?.let {
                     it.length >= 8
@@ -36,12 +32,7 @@ class MainActivity : ComponentActivity() {
             errorMessage = "Must be at least 8 characters"
         ),
         ValidationRule(
-            inputKeys = listOf(
-                Keys.password2,
-            ),
-            errorKeys = listOf(
-                Keys.password2
-            ),
+            inputKeys = listOf(Keys.password2),
             predicate = { state ->
                 state[Keys.password2]?.let {
                     it.length >= 8
@@ -50,13 +41,8 @@ class MainActivity : ComponentActivity() {
             errorMessage = "Must be at least 8 characters"
         ),
         ValidationRule(
-            inputKeys = listOf(
-                Keys.password1,
-                Keys.password2
-            ),
-            errorKeys = listOf(
-                Keys.password2
-            ),
+            inputKeys = listOf(Keys.password1, Keys.password2),
+            errorKeys = listOf(Keys.password2),
             predicate = { state ->
                 state[Keys.password1] == state[Keys.password2]
             },
@@ -68,15 +54,29 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            Form.Render(rules) { formController ->
-                val password1 = FormPassword("Password", Keys.password1, formController)
-                val password2 = FormPassword("Confirm Password", Keys.password2, formController)
-
-                ComposeFormsTheme {
+            ComposeFormsTheme {
+                Form.Render(rules) { formController ->
                     Column {
-                        password1.Compose()
-                        password2.Compose()
-                        Button(onClick = { formController.validate() }) {
+                        FormItem(Keys.password1) { key, errors ->
+                            Column {
+                                Password(
+                                    label = "Password",
+                                    onChange = { formController.onDataChange(key, it) }
+                                )
+                                errors.firstOrNull()?.also {
+                                    Text(color = Color.Magenta, text = "Error: $it")
+                                }
+                            }
+                        }
+                        FormItemWithError(Keys.password2) { key, _ ->
+                            Password(
+                                label = "Confirm Password",
+                                onChange = { formController.onDataChange(key, it) }
+                            )
+                        }
+                        Button(
+                            enabled = formController.errors.entries.all { it.value.isEmpty() },
+                            onClick = { formController.validate() }) {
                             Text(text = "Save")
                         }
                     }
@@ -96,16 +96,5 @@ fun Password(label: String, onChange: (String) -> Unit) {
             onChange(it)
             value = it
         })
-    }
-}
-
-class FormPassword(private val label: String, key: String, private val controller: Form.FormController) :
-    FormComponent(key, controller.errors) {
-    @Composable
-    override fun GetComposable() {
-        Password(
-            label = label,
-            onChange = { controller.onDataChange(key, it) }
-        )
     }
 }
