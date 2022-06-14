@@ -21,34 +21,32 @@ class MainActivity : ComponentActivity() {
         const val password2 = "password2"
     }
 
-    private val rules = listOf(
-        ValidationRule(
-            inputKeys = listOf(Keys.password1),
-            predicate = { state ->
-                state[Keys.password1]?.let {
-                    it.length >= 8
-                } ?: false
+    private val rules = Validation.Builder()
+        .isolatedRule(
+            inputKeys = listOf(Keys.password1, Keys.password2),
+            errorMessage = "Required",
+            predicate = { state, key ->
+                state[key]?.isNotEmpty()
             },
-            errorMessage = "Must be at least 8 characters"
-        ),
-        ValidationRule(
-            inputKeys = listOf(Keys.password2),
-            predicate = { state ->
-                state[Keys.password2]?.let {
+        )
+        .isolatedRule(
+            inputKeys = listOf(Keys.password1, Keys.password2),
+            errorMessage = "Must be at least 8 characters",
+            predicate = { state, key ->
+                state[key]?.let {
                     it.length >= 8
-                } ?: false
+                }
             },
-            errorMessage = "Must be at least 8 characters"
-        ),
-        ValidationRule(
+        )
+        .rule(
             inputKeys = listOf(Keys.password1, Keys.password2),
             errorKeys = listOf(Keys.password2),
+            errorMessage = "Passwords must match.",
             predicate = { state ->
                 state[Keys.password1] == state[Keys.password2]
-            },
-            errorMessage = "Passwords must match."
+            }
         )
-    )
+        .build()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
