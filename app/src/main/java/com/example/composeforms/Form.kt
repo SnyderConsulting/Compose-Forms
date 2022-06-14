@@ -12,18 +12,8 @@ class Form private constructor() {
 
     private val state = mutableMapOf<String, String>()
     private val errors = mutableStateMapOf<String, List<FormError>>()
-    private val rules = mutableListOf<InternalValidationRule>()
+    private val rules = mutableListOf<Rule>()
     private var changeListener: () -> Unit = {}
-
-    private data class InternalValidationRule(
-        val id: Int,
-        val inputKeys: List<String>,
-        val errorKeys: List<String>,
-        val predicate: (formState: Map<String, String>) -> Boolean?,
-        val isolatedPredicate: (formState: Map<String, String>, key: String) -> Boolean?,
-        val errorMessage: String,
-        val isolated: Boolean
-    )
 
     fun onDataChange(key: String, value: String) {
         if (value.isBlank()) {
@@ -94,20 +84,10 @@ class Form private constructor() {
     }
 
     fun setRules(
-        vararg rules: Validation
+        rules: List<Rule>
     ) {
         this.rules.clear()
-        this.rules.addAll(rules.mapIndexed { index, validationRule ->
-            InternalValidationRule(
-                id = index,
-                inputKeys = validationRule.inputKeys,
-                errorKeys = validationRule.errorKeys,
-                predicate = validationRule.predicate,
-                isolatedPredicate = validationRule.isolatedPredicate,
-                errorMessage = validationRule.errorMessage,
-                isolated = validationRule.isolated
-            )
-        })
+        this.rules.addAll(rules)
     }
 
     @Composable
@@ -151,42 +131,52 @@ class Form private constructor() {
 
         @Composable
         fun Render(
-            rules: List<Validation>,
+            config: FormConfig,
             content: @Composable FormScope.(FormController) -> Unit
         ) {
             val form = Form()
-            form.setRules(*rules.toTypedArray())
+            form.setRules(config.rules)
             form.Render {
-                content(FormScope(form.errors), it)
+                content(FormScope(config.errorComposable, form.errors), it)
             }
         }
     }
 }
 
-class Validation private constructor(
+class Rule(
+    val id: Int,
     val inputKeys: List<String>,
     val errorMessage: String,
     val predicate: (formState: Map<String, String>) -> Boolean?,
     val isolatedPredicate: (formState: Map<String, String>, key: String) -> Boolean?,
     val errorKeys: List<String> = listOf(*inputKeys.toTypedArray()), // Use same input keys for error keys by default
     val isolated: Boolean = false, //This indicates that each input key will not be affected by other fields
+)
+
+class FormConfig private constructor(
+    val rules: List<Rule>,
+    val errorComposable: @Composable (String) -> Unit
 ) {
     class Builder {
 
-        private val rules = mutableListOf<Validation>()
+        private val rules = mutableListOf<Rule>()
+        private var errorComposable: @Composable (errorMessage: String) -> Unit = { errorMessage ->
+            Text(color = Color.Red, text = "Error: $errorMessage")
+        }
 
-        fun rule(
+        fun addRule(
             inputKeys: List<String>,
             errorMessage: String,
             predicate: (formState: Map<String, String>) -> Boolean?,
             errorKeys: List<String> = listOf(*inputKeys.toTypedArray()), // Use same input keys for error keys by default
         ): Builder {
             rules.add(
-                Validation(
+                Rule(
+                    rules.count(),
                     inputKeys,
                     errorMessage,
                     predicate,
-                    { s, k -> null },
+                    { _, _ -> null },
                     errorKeys,
                     isolated = false
                 )
@@ -195,16 +185,17 @@ class Validation private constructor(
             return this
         }
 
-        fun isolatedRule(
+        fun addIsolatedRule(
             inputKeys: List<String>,
             errorMessage: String,
             predicate: (formState: Map<String, String>, key: String) -> Boolean?
         ): Builder {
             rules.add(
-                Validation(
+                Rule(
+                    rules.count(),
                     inputKeys,
                     errorMessage,
-                    { s -> null },
+                    { null },
                     predicate,
                     emptyList(),
                     isolated = true
@@ -214,8 +205,16 @@ class Validation private constructor(
             return this
         }
 
-        fun build(): List<Validation> {
-            return rules
+        fun setErrorComposable(content: @Composable (String) -> Unit): Builder {
+            errorComposable = content
+            return this
+        }
+
+        fun build(): FormConfig {
+            return FormConfig(
+                rules,
+                errorComposable
+            )
         }
     }
 }
@@ -224,7 +223,10 @@ typealias FormErrorBundle = Map<String, List<FormError>>
 
 data class FormError(val key: Int, val errorMessage: String)
 
-data class FormScope(val errors: SnapshotStateMap<String, List<FormError>>) {
+data class FormScope(
+    private val errorComposable: @Composable (String) -> Unit,
+    val errors: SnapshotStateMap<String, List<FormError>>
+) {
     @Composable
     fun FormItem(key: String, content: @Composable (key: String, errors: List<String>) -> Unit) {
         content(key, errors[key].orEmpty().map { it.errorMessage })
@@ -238,7 +240,7 @@ data class FormScope(val errors: SnapshotStateMap<String, List<FormError>>) {
         Column {
             content(key, errors[key].orEmpty().map { it.errorMessage })
             errors[key]?.firstOrNull()?.also {
-                Text(color = Color.Red, text = "Error: ${it.errorMessage}")
+                errorComposable(it.errorMessage)
             }
         }
     }

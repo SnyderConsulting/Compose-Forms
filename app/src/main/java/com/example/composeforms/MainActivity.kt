@@ -28,15 +28,15 @@ class MainActivity : ComponentActivity() {
         const val lastName = "lastName"
     }
 
-    private val rules = Validation.Builder()
-        .isolatedRule(
+    private val formConfig = FormConfig.Builder()
+        .addIsolatedRule(
             inputKeys = listOf(Keys.password1, Keys.password2, Keys.firstName, Keys.lastName),
             errorMessage = "Required",
             predicate = { state, key ->
                 state[key]?.isNotEmpty()
             },
         )
-        .isolatedRule(
+        .addIsolatedRule(
             inputKeys = listOf(Keys.password1, Keys.password2),
             errorMessage = "Must be at least 8 characters",
             predicate = { state, key ->
@@ -45,7 +45,7 @@ class MainActivity : ComponentActivity() {
                 }
             },
         )
-        .rule(
+        .addRule(
             inputKeys = listOf(Keys.password1, Keys.password2),
             errorKeys = listOf(Keys.password2),
             errorMessage = "Passwords must match",
@@ -53,7 +53,7 @@ class MainActivity : ComponentActivity() {
                 state[Keys.password1] == state[Keys.password2]
             }
         )
-        .rule(
+        .addRule(
             inputKeys = listOf(Keys.email),
             errorMessage = "Must be a valid email address",
             predicate = { state ->
@@ -62,6 +62,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
         )
+//        .setErrorComposable {
+//            Text(color = Color.Black, text = "Error: $it")
+//        }
         .build()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -71,22 +74,27 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             ComposeFormsTheme {
-                Form.Render(rules) { formController ->
-                    Column(modifier = Modifier
-                        .padding(24.dp)
-                        .verticalScroll(rememberScrollState())) {
+                Form.Render(formConfig) { formController ->
+                    Column(
+                        modifier = Modifier
+                            .padding(24.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+
                         FormItemWithError(Keys.firstName) { key, _ ->
                             InputField(
                                 label = "First Name*",
                                 onChange = { formController.onDataChange(key, it) }
                             )
                         }
+
                         FormItemWithError(Keys.lastName) { key, _ ->
                             InputField(
                                 label = "Last Name*",
                                 onChange = { formController.onDataChange(key, it) }
                             )
                         }
+
                         FormItem(Keys.password1) { key, errors ->
                             Column {
                                 InputField(
@@ -98,19 +106,23 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+
                         FormItemWithError(Keys.password2) { key, _ ->
                             InputField(
                                 label = "Confirm Password*",
                                 onChange = { formController.onDataChange(key, it) }
                             )
                         }
+
                         FormItemWithError(Keys.email) { key, _ ->
                             InputField(
                                 label = "Email Address",
                                 onChange = { formController.onDataChange(key, it) }
                             )
                         }
+
                         Text(modifier = Modifier.padding(16.dp), text = "* required")
+
                         Button(
                             modifier = Modifier.align(Alignment.End),
                             enabled = formController.errors.entries.all { it.value.isEmpty() },
